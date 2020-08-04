@@ -15,7 +15,6 @@ combined_url_base="file:///home/paul/_dev/basicblog" #the url of your blog index
 #remove trailing spaces from some variables
 drafts_dir=$(echo $drafts_dir | sed 's:/*$::')
 
-
 help()
 {
     echo "bb - a basic blogging system"
@@ -57,15 +56,22 @@ prompt_confirm() {
 new()
 {
     mkdir -p "$drafts_dir"
-    echo -n "Enter Title (leave blank to cancel): "
-    read ask
-	if [ ! "$ask" = "" ]; then
+
+    if [ "$1" = "" ]; then
+        echo -n "Enter Title (leave blank to cancel): "
+        read ask
+    else
+        ask="$1"
+    fi
+
+    if [ ! "$ask" = "" ]; then
         filename=$(title_to_filename $ask)
         final_path="$drafts_dir/${filename}.html"
         if [ -f "$final_path" ]; then
             prompt_confirm "Post exists. Edit?" || return
         fi
-        edit "$final_path"
+        "$EDITOR" "$final_path"
+        #edit "$final_path"
     fi
 
     return
@@ -89,7 +95,40 @@ new()
 
 edit()
 {
-    "$EDITOR" "$@"
+    file="$1.html"
+    if [ ! -f "$drafts_dir/$file" ]; then
+        list_and_return "$drafts_dir"
+        file=$drafts_dir/$(get_file_from_index "$drafts_dir" $?)
+    fi
+    #echo $file
+    "$EDITOR" "$file"
+}
+
+#$1 is the folder to list
+#returns 0 on failure, or the number of the file on success
+list_and_return()
+{
+    echo "Drafts in $1"
+    
+    case "$(ls "$1" | wc -l )" in
+        0) echo "Nothing to select" && return 0 ;;
+        1) selection=1 && echo "Only one option available - defaulting selection to 1" ;;
+        *) ls -rc "$1" | nl
+            echo "Please select an option (leave blank to cancel): "
+            read number
+            if [ "$number" = "" ] || ! [ "$number" -eq "$number" ] 2> /dev/null; then
+                return 0
+            fi ;;
+    esac
+    return $number
+}
+
+#when we call list_and_return, we can use this
+#to get the filename of whichever item we selected
+get_file_from_index()
+{
+    [ "$2" -eq 0 ] && return
+    echo "$(ls -rc "$1" | nl | grep -w " $2" | awk '{print $2}')"
 }
 
 delete()
@@ -128,11 +167,11 @@ if [ ! -d "$BLOGDIR" ]; then
 fi
 
 case "$1" in
-    n*) new ;;
-    e*) edit ;;
-    d*) delete ;;
-    p*) publish ;;
-    u*) unpublish ;;
+    n*) new $2 ;;
+    e*) edit $2 ;;
+    d*) delete $2 ;;
+    p*) publish $2 ;;
+    u*) unpublish $2 ;;
     g*) generate ;;
     *) help ;;
 esac
