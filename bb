@@ -16,6 +16,8 @@ if [ "$1" = "--help" ]; then
     echo "Set the BLOGDIR environment variable"
     echo "blah blah blah"
     exit 0
+elif [ ! "$1" = "" ]; then #we can optionally get the outfile name from the command line
+    combined_outfile="$1"
 fi
 
 if [ "$BLOGDIR" = "" ]; then
@@ -53,9 +55,6 @@ echo "Processing $count posts"
 for f in "$fullpath"/*; do
     filename=$(basename "$f" ".html")
     outfile="$out_dir/$filename.html"
-    #relativename=$(echo $outfile | sed -e "s|$out_dir/||g");
-
-    #echo "relativename: $relativename"
 
     titlecase=$(echo "$filename" | tr -s '_' | tr '_' ' ' | awk '{printf("%s%s\n",toupper(substr($0,1,1)),substr($0,2))}')
     timestamp=$(stat -c %z "$f" | cut -d\  -f1 )
