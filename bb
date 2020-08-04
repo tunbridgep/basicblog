@@ -69,17 +69,17 @@ for f in "$fullpath"/*; do
     ##LOTS OF DUPLICATED CODE!
 
     #first generate output for the combined version of the file
-    [ -f header_combined.html ] && cat header_combined.html > "$tempfile"
+    [ -f item_header_combined.html ] && cat item_header_combined.html > "$tempfile"
     echo "" >> "$tempfile"
     if [ $max_chars -gt 0 ] && [ $file_size_b -gt $max_chars ]; then
         head -c $max_chars "$f" >> $tempfile
         echo " ... " >> $tempfile
-        [ -f continue_reading.html ] && cat continue_reading.html >> "$tempfile" || echo '<a href="@permalink">Continue Reading</a>' >> "$tempfile"
+        [ -f item_continue_reading.html ] && cat continue_reading.html >> "$tempfile" || echo '<a href="@permalink">Continue Reading</a>' >> "$tempfile"
     else
         cat "$f" >> "$tempfile"
     fi
     echo "" >> "$tempfile"
-    [ -f footer_combined.html ] && cat footer_combined.html >> "$tempfile"
+    [ -f item_footer_combined.html ] && cat item_footer_combined.html >> "$tempfile"
     
 
     sed -i "s|@id|$filename|gI" "$tempfile"
@@ -91,13 +91,13 @@ for f in "$fullpath"/*; do
     rm $tempfile
 
     #Then generate output for the "permalink" version
-    [ -f header_permalink.html ] && cat header_permalink.html > "$outfile"
+    [ -f item_header_permalink.html ] && cat item_header_permalink.html > "$outfile"
     echo "" >> "$outfile"
     cat "$f" >> "$outfile"
     echo "" >> "$outfile"
-    [ -f footer_permalink.html ] && cat footer_permalink.html >> "$outfile"
-    if [ -f footer_goback.html ]; then
-        cat footer_goback.html >> "$outfile"
+    [ -f item_footer_permalink.html ] && cat item_footer_permalink.html >> "$outfile"
+    if [ -f item_goback.html ]; then
+        cat item_goback.html >> "$outfile"
     else
         echo '<div class="goback"><a href="'$combined_url_base$combined_outfile'">Go Back</a></div>' >> "$outfile"
     fi
