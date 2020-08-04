@@ -2,6 +2,8 @@
 
 #User Variables
 
+drafts_dir="$BLOGDIR/.drafts"
+
 max_chars=200 #max number of characters to display in a posts body before inserting a "continue reading" link, to prevent long posts filling the page. Set to 0 to disable
 url_base="file:///home/paul/_dev/basicblog/out" #this is the base for your url, like mysite.com/blog/..., where your blogs will link to. This is just the prefix, so myblog.com/blog/post1.html would be myblog.com/blog/
 out_dir=$(realpath "out") #the directory where our permalink blog pages are saved
@@ -10,15 +12,110 @@ combined_url_base="file:///home/paul/_dev/basicblog" #the url of your blog index
 
 ########################################
 
-if [ "$1" = "--help" ]; then
+#remove trailing spaces from some variables
+drafts_dir=$(echo $drafts_dir | sed 's:/*$::')
+
+
+help()
+{
     echo "bb - a basic blogging system"
     echo
     echo "Set the BLOGDIR environment variable"
     echo "blah blah blah"
     exit 0
-elif [ ! "$1" = "" ]; then #we can optionally get the outfile name from the command line
-    combined_outfile="$1"
-fi
+}
+
+filename_to_title()
+{
+    no_timestamp=$(filename_no_timestamp "$@")
+    echo "$@" | sed 's/^.*__//' | tr -s '_' | tr '_' ' ' | awk '{printf("%s%s\n",toupper(substr($0,1,1)),substr($0,2))}'
+}
+
+title_to_filename()
+{
+    echo "$@" | tr -s ' ' | tr ' ' '_' | awk '{print tolower($0)}'
+}
+
+get_post_exists()
+{
+    files=$(find $BLOGDIR -name "*__${1}.html")
+    [ $files = "" ] && return 1 || return 0
+}
+
+prompt_confirm() {
+  while true; do
+    echo -n "${1:-Continue?} [y/n]: "
+    read REPLY
+    case $REPLY in
+      [yY]) echo ; return 0 ;;
+      [nN]) echo ; return 1 ;;
+      *) printf " \033[31m %s \n\033[0m" "invalid input"
+    esac 
+  done  
+}
+
+new()
+{
+    mkdir -p "$drafts_dir"
+    echo -n "Enter Title (leave blank to cancel): "
+    read ask
+	if [ ! "$ask" = "" ]; then
+        filename=$(title_to_filename $ask)
+        final_path="$drafts_dir/${filename}.html"
+        if [ -f "$final_path" ]; then
+            prompt_confirm "Post exists. Edit?" || return
+        fi
+        edit "$final_path"
+    fi
+
+    return
+
+    ##this will be needed later
+	if [ ! "$ask" = "" ]; then
+        filename=$(title_to_filename $ask)
+        temp="$drafts_dir/__temp"
+        touch "$temp"
+        timestamp=$(stat -c %z "$temp" | cut -d\  -f1 )
+        rm "$temp"
+        final_path="$drafts_dir/${timestamp}__${filename}.html"
+        existing_file=$
+
+        if [ ! "$existing_file" = "" ]; then
+            prompt_confirm "Post exists. Edit?" && edit "$existing_file" || return
+        fi
+        edit "$final_path"
+    fi
+}
+
+edit()
+{
+    "$EDITOR" "$@"
+}
+
+delete()
+{
+    echo
+}
+
+publish()
+{
+    mkdir -p "$drafts_dir"
+    echo -n "Enter Title (leave blank to cancel): "
+    read ask
+	if [ ! "$ask" = "" ]; then
+        filename=$(title_to_filename $ask)
+    fi
+}
+
+unpublish()
+{
+    echo
+}
+
+generate()
+{
+    echo
+}
 
 if [ "$BLOGDIR" = "" ]; then
     echo "BLOGDIR environment variable is not set"
@@ -29,6 +126,21 @@ if [ ! -d "$BLOGDIR" ]; then
     echo "Blog directory at $BLOGDIR doesn't exist"
     exit 1
 fi
+
+case "$1" in
+    n*) new ;;
+    e*) edit ;;
+    d*) delete ;;
+    p*) publish ;;
+    u*) unpublish ;;
+    g*) generate ;;
+    *) help ;;
+esac
+
+exit 0
+
+
+####################################################################################################
 
 url_base=$(echo $url_base | sed 's:/*$::')
 [ ! $url_base = "" ] && url_base=$url_base/
