@@ -1,11 +1,12 @@
 #!/bin/sh
 
-#User Variables
-
-drafts_dir="$BLOGDIR/.drafts"
-
+#Blog Settings
 max_chars=200 #max number of characters to display in a post body before inserting a "continue reading" link, to prevent long posts filling the page. Set to 0 to disable
+drafts_dir="$BLOGDIR/.drafts" #Directory for storing drafts
+
+#Web Settings
 out_dir=$(realpath "out") #the directory where our individual blog posts are saved
+template_dir=$(realpath "template") #the directory where our templates are located
 out_file="out.html" #the path to our index file, containing the list of blog posts
 url_index="file:///home/paul/_dev/basicblog" #the URL for the index of the blog. The index file name will be appended to this. This is used in "Go Back" linkx
 url_posts="file:///home/paul/_dev/basicblog/out" #the url for each invididual post. Post filenames will be appended to this. This is used for permalinks.
@@ -20,11 +21,20 @@ url_posts=$(echo $url_posts | sed 's:/*$::')
 
 help()
 {
-    echo "bb - a basic blogging system"
+    echo "bb - a basic blogging system by Paul Tunbridge <tunbridgep@gmail.com>"
     echo
-    echo "Set the BLOGDIR environment variable"
-    echo "blah blah blah"
-    exit 0
+    echo "Usage: bb <command>"
+    echo
+    echo "Commands are"
+    echo "\t(n)ew - Create a new draft. Can optionally specify a filename"
+    echo "\t(e)dit - Edit an existing draft. Can optionally specify a filename"
+    echo "\t(d)elete - Delete an existing draft. Can optionally specify a filename"
+    echo "\t(p)ublish - Publish a draft, making it appear in the list. Can optionally specify a filename"
+    echo "\t(u)npublish - Unublish a draft, returning it to draft status. Can optionally specify a filename"
+    echo "\t(g)enerate - Create a blog index and files for each entry. Can optionally specify a custom template dir"
+    echo "\t(h)elp - Display this message"
+    echo
+    echo "Blog pages will be stored in the BLOGDIR environment variable"
 }
 
 filename_add_timestamp()
@@ -39,7 +49,6 @@ filename_remove_timestamp()
 
 filename_get_timestamp()
 {
-    #basename "$@" | sed 's/.*__ //'
     basename "$@" | awk -F "__" '{print $1}'
 }
 
@@ -91,25 +100,6 @@ new()
         "$EDITOR" "$final_path"
         #edit "$final_path"
     fi
-
-    return
-
-    ##this will be needed later
-	if [ ! "$ask" = "" ]; then
-        filename=$(title_to_filename $ask)
-        temp="$drafts_dir/__temp"
-        touch "$temp"
-        timestamp=$(stat -c %z "$temp" | cut -d\  -f1 )
-        rm "$temp"
-        final_path="$drafts_dir/${timestamp}__${filename}.html"
-        existing_file=$
-
-        if [ ! "$existing_file" = "" ]; then
-            base=$(basename $existing_file)
-            prompt_confirm "$base already exists. Edit?" && edit "$existing_file" || return
-        fi
-        edit "$final_path"
-    fi
 }
 
 edit()
@@ -120,7 +110,6 @@ edit()
         file=$drafts_dir/$(get_file_from_index "$drafts_dir" $?)
     fi
     [ "$file" = "$drafts_dir/" ] && return
-    #echo $file
     "$EDITOR" "$file"
 }
 
@@ -207,52 +196,58 @@ process_file()
 
 generate()
 {
-    #tempfile="__.html"
+    if [ "$1" = "" ]; then
+        template_path=$template_dir
+    else
+        template_path=$1
+    fi
+    template_path=$(echo $template_path | sed 's:/*$::')
+
     count=$(ls "$BLOGDIR" | wc -l)
     mkdir -p "$out_dir"
 
     [ $count -eq 0 ] && echo "No published posts" && return
+    [ -f "$out_file" ] && rm "$out_file"
 
     echo "Processing $count posts"
 
-    [ -f header_global.html ] && cat "header_global.html" > "$out_file"
+    [ -f "$template_path/header_global.html" ] && cat "$template_path/header_global.html" > "$out_file"
     
     for f in "$BLOGDIR"/*; do
         file_size_b=$(du -b "$f" | cut -f1)
         [ $file_size_b -eq 0 ] && continue
 
         #generate content for index
-        [ -f item_header_combined.html ] && cat "item_header_combined.html" >> "$out_file"
+        [ -f "$template_path/item_header_combined.html" ] && cat "$template_path/item_header_combined.html" >> "$out_file"
         echo "" >> "$out_file"
         if [ $max_chars -gt 0 ] && [ $file_size_b -gt $max_chars ]; then
             head -c $max_chars "$f" >> $out_file
             echo "... " >> $out_file
-            [ -f item_continue_reading.html ] && cat "continue_reading.html" >> "$out_file" || echo '<a href="@permalink">Continue Reading</a>' >> "$out_file"
+            [ -f "$template_path/item_continue_reading.html" ] && cat "$template_path/continue_reading.html" >> "$out_file" || echo '<a href="@permalink">Continue Reading</a>' >> "$out_file"
         else
             cat "$f" >> "$out_file"
         fi
         echo "" >> "$out_file"
-        [ -f item_footer_combined.html ] && cat "item_footer_combined.html" >> "$out_file"
+        [ -f "$template_path/item_footer_combined.html" ] && cat "$template_path/item_footer_combined.html" >> "$out_file"
 
         #generate content for individual file
         basename=$(basename $f)
         blogfile="$out_dir/$basename"
-        [ -f item_header_permalink.html ] && cat "item_header_permalink.html" > "$blogfile"
+        [ -f "$template_path/item_header_permalink.html" ] && cat "$template_path/item_header_permalink.html" > "$blogfile"
         cat "$f" >> "$blogfile"
         if [ -f item_goback.html ]; then
             cat item_goback.html >> "$blogfile"
         else
             echo '<div class="goback"><a href="@index">Go Back</a></div>' >> "$blogfile"
         fi
-        [ -f item_footer_permalink.html ] && cat "item_footer_permalink.html" >> "$blogfile"
+        [ -f "$template_path/item_footer_permalink.html" ] && cat "$template_path/item_footer_permalink.html" >> "$blogfile"
 
         #replace our symbols
         process_file "$blogfile" "$blogfile"
         process_file "$out_file" "$blogfile"
     done
-
     
-    [ -f footer_global.html ] && cat "footer_global.html" >> "$out_file"
+    [ -f "$template_path/footer_global.html" ] && cat "$template_path/footer_global.html" >> "$out_file"
 }
 
 if [ "$BLOGDIR" = "" ]; then
@@ -271,90 +266,6 @@ case "$1" in
     d*) delete $2 ;;
     p*) publish $2 ;;
     u*) unpublish $2 ;;
-    g*) generate ;;
+    g*) generate $2 ;;
     *) help ;;
 esac
-
-exit 0
-
-
-####################################################################################################
-
-url_base=$(echo $url_base | sed 's:/*$::')
-[ ! $url_base = "" ] && url_base=$url_base/
-combined_url_base=$(echo $combined_url_base | sed 's:/*$::')
-[ ! $combined_url_base = "" ] && combined_url_base=$combined_url_base/
-
-fullpath=$(realpath "$BLOGDIR")
-tempfile="__.html"
-
-[ -f "$combined_outfile" ] && rm "$combined_outfile"
-[ -d "$out_dir" ] && rm -r "$out_dir"
-
-mkdir -p "$out_dir"
-
-echo "Using blog directory $fullpath"
-echo "Outputting blog files to $out_dir"
-
-count=$(ls "$fullpath" | wc -l)
-echo "Processing $count posts"
-
-
-[ -f header_global.html ] && cat "header_global.html" > "$combined_outfile"
-
-for f in "$fullpath"/*; do
-    filename=$(basename "$f" ".html")
-    outfile="$out_dir/$filename.html"
-
-    titlecase=$(echo "$filename" | tr -s '_' | tr '_' ' ' | awk '{printf("%s%s\n",toupper(substr($0,1,1)),substr($0,2))}')
-    timestamp=$(stat -c %z "$f" | cut -d\  -f1 )
-    file_size_b=$(du -b "$f" | cut -f1)
-
-    [ $file_size_b -eq 0 ] && echo "skipping empty file $filename.html..." && continue
-
-    echo "Processing $filename.html..."
-
-    ##FIX THIS
-    ##LOTS OF DUPLICATED CODE!
-
-    #first generate output for the combined version of the file
-    [ -f item_header_combined.html ] && cat item_header_combined.html > "$tempfile"
-    echo "" >> "$tempfile"
-    if [ $max_chars -gt 0 ] && [ $file_size_b -gt $max_chars ]; then
-        head -c $max_chars "$f" >> $tempfile
-        echo " ... " >> $tempfile
-        [ -f item_continue_reading.html ] && cat continue_reading.html >> "$tempfile" || echo '<a href="@permalink">Continue Reading</a>' >> "$tempfile"
-    else
-        cat "$f" >> "$tempfile"
-    fi
-    echo "" >> "$tempfile"
-    [ -f item_footer_combined.html ] && cat item_footer_combined.html >> "$tempfile"
-    
-
-    sed -i "s|@id|$filename|gI" "$tempfile"
-    sed -i "s|@permalink|$url_base$filename.html|gI" "$tempfile"
-    sed -i "s|@title|$titlecase|gI" "$tempfile"
-    sed -i "s/@timestamp/$timestamp/" "$tempfile"
-
-    cat $tempfile >> $combined_outfile
-    rm $tempfile
-
-    #Then generate output for the "permalink" version
-    [ -f item_header_permalink.html ] && cat item_header_permalink.html > "$outfile"
-    echo "" >> "$outfile"
-    cat "$f" >> "$outfile"
-    echo "" >> "$outfile"
-    [ -f item_footer_permalink.html ] && cat item_footer_permalink.html >> "$outfile"
-    if [ -f item_goback.html ]; then
-        cat item_goback.html >> "$outfile"
-    else
-        echo '<div class="goback"><a href="'$combined_url_base$combined_outfile'">Go Back</a></div>' >> "$outfile"
-    fi
-
-    sed -i "s|@id|$filename|gI" "$outfile"
-    sed -i "s|@permalink|$url_base$filename.html|gI" "$outfile"
-    sed -i "s|@title|$titlecase|gI" "$outfile"
-    sed -i "s/@timestamp/$timestamp/" "$outfile"
-done
-
-[ -f footer_global.html ] && cat "footer_global.html" >> "$combined_outfile"
