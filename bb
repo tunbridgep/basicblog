@@ -39,7 +39,7 @@ help()
 
 filename_add_timestamp()
 {
-    echo $(date +"%Y-%m-%d")__"$@"
+    echo $(date +"%Y-%m-%d-%I:%M-%p")__"$@"
 }
 
 filename_remove_timestamp()
@@ -152,14 +152,15 @@ delete()
 
 publish()
 {
-    file="$1.html"
-    if [ ! -f "$drafts_dir/$file" ]; then
+    file="$drafts_dir/$1.html"
+    if [ ! -f "$file" ]; then
         list_and_return "$drafts_dir" "publish"
         file=$drafts_dir/$(get_file_from_index "$drafts_dir" $?)
     fi
     [ "$file" = "$drafts_dir/" ] && return
+    echo $file
     file_size_b=$(du -b "$file" | cut -f1)
-    [ $file_size_b -eq 0 ] && echo "Cannot publish an empty file" && return
+    [ $file_size_b -eq 0 ] 2>/dev/null && echo "Cannot publish an empty file" && return
     base=$(basename $file)
     nicename=$(filename_to_title $base)
     new_filename=$(filename_add_timestamp "$base")
