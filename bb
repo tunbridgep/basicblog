@@ -4,16 +4,19 @@
 
 drafts_dir="$BLOGDIR/.drafts"
 
-max_chars=200 #max number of characters to display in a posts body before inserting a "continue reading" link, to prevent long posts filling the page. Set to 0 to disable
-url_base="file:///home/paul/_dev/basicblog/out" #this is the base for your url, like mysite.com/blog/..., where your blogs will link to. This is just the prefix, so myblog.com/blog/post1.html would be myblog.com/blog/
-out_dir=$(realpath "out") #the directory where our permalink blog pages are saved
-combined_outfile="out.html" #the path of our blog index. Doesn't necessarily have to be in the out dir
-combined_url_base="file:///home/paul/_dev/basicblog" #the url of your blog index, such as mysite.com/blog/
+max_chars=200 #max number of characters to display in a post body before inserting a "continue reading" link, to prevent long posts filling the page. Set to 0 to disable
+out_dir=$(realpath "out") #the directory where our individual blog posts are saved
+out_file="out.html" #the path to our index file, containing the list of blog posts
+url_index="file:///home/paul/_dev/basicblog" #the URL for the index of the blog. The index file name will be appended to this. This is used in "Go Back" linkx
+url_posts="file:///home/paul/_dev/basicblog/out" #the url for each invididual post. Post filenames will be appended to this. This is used for permalinks.
 
 ########################################
 
-#remove trailing spaces from some variables
+#remove trailing slashes from some variables
 drafts_dir=$(echo $drafts_dir | sed 's:/*$::')
+out_dir=$(echo $out_dir | sed 's:/*$::')
+url_index=$(echo $url_index | sed 's:/*$::')
+url_posts=$(echo $url_posts | sed 's:/*$::')
 
 help()
 {
@@ -24,10 +27,25 @@ help()
     exit 0
 }
 
+filename_add_timestamp()
+{
+    echo $(date +"%Y-%m-%d")__"$@"
+}
+
+filename_remove_timestamp()
+{
+    echo "$@" | sed 's/^.*__//'
+}
+
+filename_get_timestamp()
+{
+    #basename "$@" | sed 's/.*__ //'
+    basename "$@" | awk -F "__" '{print $1}'
+}
+
 filename_to_title()
 {
-    no_timestamp=$(filename_no_timestamp "$@")
-    echo "$@" | sed 's/^.*__//' | tr -s '_' | tr '_' ' ' | awk '{printf("%s%s\n",toupper(substr($0,1,1)),substr($0,2))}'
+    basename "$@" ".html" | sed 's/^.*__//' | tr -s '_' | tr '_' ' ' | awk '{printf("%s%s\n",toupper(substr($0,1,1)),substr($0,2))}'
 }
 
 title_to_filename()
@@ -87,7 +105,8 @@ new()
         existing_file=$
 
         if [ ! "$existing_file" = "" ]; then
-            prompt_confirm "Post exists. Edit?" && edit "$existing_file" || return
+            base=$(basename $existing_file)
+            prompt_confirm "$base already exists. Edit?" && edit "$existing_file" || return
         fi
         edit "$final_path"
     fi
@@ -97,9 +116,10 @@ edit()
 {
     file="$1.html"
     if [ ! -f "$drafts_dir/$file" ]; then
-        list_and_return "$drafts_dir"
+        list_and_return "$drafts_dir" "edit"
         file=$drafts_dir/$(get_file_from_index "$drafts_dir" $?)
     fi
+    [ "$file" = "$drafts_dir/" ] && return
     #echo $file
     "$EDITOR" "$file"
 }
@@ -108,13 +128,11 @@ edit()
 #returns 0 on failure, or the number of the file on success
 list_and_return()
 {
-    echo "Drafts in $1"
-    
     case "$(ls "$1" | wc -l )" in
-        0) echo "Nothing to select" && return 0 ;;
-        1) selection=1 && echo "Only one option available - defaulting selection to 1" ;;
+        0) echo "Nothing to $2" && return 0 ;;
+        1) number=1 ;;
         *) ls -rc "$1" | nl
-            echo "Please select an option (leave blank to cancel): "
+            echo "Please select an option to $2 (leave blank to cancel): "
             read number
             if [ "$number" = "" ] || ! [ "$number" -eq "$number" ] 2> /dev/null; then
                 return 0
@@ -128,32 +146,113 @@ list_and_return()
 get_file_from_index()
 {
     [ "$2" -eq 0 ] && return
-    echo "$(ls -rc "$1" | nl | grep -w " $2" | awk '{print $2}')"
+    echo "$(ls -rc "$1" | nl | grep -w " $2" | awk '{print $2}' )"
 }
 
 delete()
 {
-    echo
+    file="$1.html"
+    if [ ! -f "$drafts_dir/$file" ]; then
+        list_and_return "$drafts_dir" "delete"
+        file=$drafts_dir/$(get_file_from_index "$drafts_dir" $?)
+    fi
+    [ "$file" = "$drafts_dir/" ] && return
+    base=$(basename $file)
+    prompt_confirm "This will DELETE the draft $base. Are you sure?" && rm $file || return
 }
 
 publish()
 {
-    mkdir -p "$drafts_dir"
-    echo -n "Enter Title (leave blank to cancel): "
-    read ask
-	if [ ! "$ask" = "" ]; then
-        filename=$(title_to_filename $ask)
+    file="$1.html"
+    if [ ! -f "$drafts_dir/$file" ]; then
+        list_and_return "$drafts_dir" "publish"
+        file=$drafts_dir/$(get_file_from_index "$drafts_dir" $?)
     fi
+    [ "$file" = "$drafts_dir/" ] && return
+    file_size_b=$(du -b "$file" | cut -f1)
+    [ $file_size_b -eq 0 ] && echo "Cannot publish an empty file" && return
+    base=$(basename $file)
+    nicename=$(filename_to_title $base)
+    new_filename=$(filename_add_timestamp "$base")
+    prompt_confirm "This will PUBLISH the draft $base as $new_filename with the title '$nicename'. Are you sure?" || return
+    mv "$file" "$BLOGDIR/$new_filename"
+
 }
 
 unpublish()
 {
-    echo
+    file="$1.html"
+    if [ ! -f "$BLOGDIR/$file" ]; then
+        list_and_return "$BLOGDIR" "unpublish"
+        file=$BLOGDIR/$(get_file_from_index "$BLOGDIR" $?)
+    fi
+    [ "$file" = "$BLOGDIR/" ] && return
+    base=$(basename $file)
+    prompt_confirm "This will UNPUBLISH the draft $base. Are you sure?" || return
+    new_filename=$(filename_remove_timestamp "$base")
+    mv "$file" "$drafts_dir/$new_filename"
+}
+
+process_file()
+{
+    basename=$(basename $2)
+    titlecase=$(filename_to_title $2)
+    timestamp=$(filename_get_timestamp $2)
+    sed -i "s|@id|$basename|gI" "$1"
+    sed -i "s|@index|$url_index/$out_file|gI" "$1"
+    sed -i "s|@permalink|$url_posts/$basename|gI" "$1"
+    sed -i "s|@title|$titlecase|gI" "$1"
+    sed -i "s/@timestamp/$timestamp/" "$1"
 }
 
 generate()
 {
-    echo
+    #tempfile="__.html"
+    count=$(ls "$BLOGDIR" | wc -l)
+    mkdir -p "$out_dir"
+
+    [ $count -eq 0 ] && echo "No published posts" && return
+
+    echo "Processing $count posts"
+
+    [ -f header_global.html ] && cat "header_global.html" > "$out_file"
+    
+    for f in "$BLOGDIR"/*; do
+        file_size_b=$(du -b "$f" | cut -f1)
+        [ $file_size_b -eq 0 ] && continue
+
+        #generate content for index
+        [ -f item_header_combined.html ] && cat "item_header_combined.html" >> "$out_file"
+        echo "" >> "$out_file"
+        if [ $max_chars -gt 0 ] && [ $file_size_b -gt $max_chars ]; then
+            head -c $max_chars "$f" >> $out_file
+            echo "... " >> $out_file
+            [ -f item_continue_reading.html ] && cat "continue_reading.html" >> "$out_file" || echo '<a href="@permalink">Continue Reading</a>' >> "$out_file"
+        else
+            cat "$f" >> "$out_file"
+        fi
+        echo "" >> "$out_file"
+        [ -f item_footer_combined.html ] && cat "item_footer_combined.html" >> "$out_file"
+
+        #generate content for individual file
+        basename=$(basename $f)
+        blogfile="$out_dir/$basename"
+        [ -f item_header_permalink.html ] && cat "item_header_permalink.html" > "$blogfile"
+        cat "$f" >> "$blogfile"
+        if [ -f item_goback.html ]; then
+            cat item_goback.html >> "$blogfile"
+        else
+            echo '<div class="goback"><a href="@index">Go Back</a></div>' >> "$blogfile"
+        fi
+        [ -f item_footer_permalink.html ] && cat "item_footer_permalink.html" >> "$blogfile"
+
+        #replace our symbols
+        process_file "$blogfile" "$blogfile"
+        process_file "$out_file" "$blogfile"
+    done
+
+    
+    [ -f footer_global.html ] && cat "footer_global.html" >> "$out_file"
 }
 
 if [ "$BLOGDIR" = "" ]; then
