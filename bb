@@ -203,32 +203,36 @@ generate()
     fi
     template_path=$(echo $template_path | sed 's:/*$::')
 
+    if [ "$2" = "" ]; then
+        out="$out_file"
+    else
+        out="$2"
+    fi
+
     count=$(ls "$BLOGDIR" | wc -l)
     mkdir -p "$out_dir"
 
     [ $count -eq 0 ] && echo "No published posts" && return
-    [ -f "$out_file" ] && rm "$out_file"
+    [ -f "$out" ] && rm "$out"
 
     echo "Processing $count posts"
 
-    [ -f "$template_path/header_global.html" ] && cat "$template_path/header_global.html" > "$out_file"
+    [ -f "$template_path/header_global.html" ] && cat "$template_path/header_global.html" > "$out"
     
     for f in "$BLOGDIR"/*; do
         file_size_b=$(du -b "$f" | cut -f1)
         [ $file_size_b -eq 0 ] && continue
 
         #generate content for index
-        [ -f "$template_path/item_header_combined.html" ] && cat "$template_path/item_header_combined.html" >> "$out_file"
-        echo "" >> "$out_file"
+        [ -f "$template_path/item_header_combined.html" ] && cat "$template_path/item_header_combined.html" >> "$out"
         if [ $max_chars -gt 0 ] && [ $file_size_b -gt $max_chars ]; then
-            head -c $max_chars "$f" >> $out_file
-            echo "... " >> $out_file
-            [ -f "$template_path/item_continue_reading.html" ] && cat "$template_path/continue_reading.html" >> "$out_file" || echo '<a href="@permalink">Continue Reading</a>' >> "$out_file"
+            head -c $max_chars "$f" >> $out
+            echo "... " >> $out
+            [ -f "$template_path/item_continue_reading.html" ] && cat "$template_path/continue_reading.html" >> "$out" || echo '<a href="@permalink">Continue Reading</a>' >> "$out"
         else
-            cat "$f" >> "$out_file"
+            cat "$f" >> "$out"
         fi
-        echo "" >> "$out_file"
-        [ -f "$template_path/item_footer_combined.html" ] && cat "$template_path/item_footer_combined.html" >> "$out_file"
+        [ -f "$template_path/item_footer_combined.html" ] && cat "$template_path/item_footer_combined.html" >> "$out"
 
         #generate content for individual file
         basename=$(basename $f)
@@ -244,10 +248,10 @@ generate()
 
         #replace our symbols
         process_file "$blogfile" "$blogfile"
-        process_file "$out_file" "$blogfile"
+        process_file "$out" "$blogfile"
     done
     
-    [ -f "$template_path/footer_global.html" ] && cat "$template_path/footer_global.html" >> "$out_file"
+    [ -f "$template_path/footer_global.html" ] && cat "$template_path/footer_global.html" >> "$out"
 }
 
 if [ "$BLOGDIR" = "" ]; then
@@ -266,6 +270,6 @@ case "$1" in
     d*) delete $2 ;;
     p*) publish $2 ;;
     u*) unpublish $2 ;;
-    g*) generate $2 ;;
+    g*) generate $2 $3 ;;
     *) help ;;
 esac
