@@ -225,7 +225,7 @@ generate()
 
         #generate content for index
         [ -f "$template_path/item_header_combined.html" ] && cat "$template_path/item_header_combined.html" >> "$out"
-        if [ $max_chars -gt 0 ] && [ $file_size_b -gt $max_chars ]; then
+        if [ $max_chars -gt 0 ] && [ $file_size_b -gt $max_chars ] && [ ! "$3" = "no" ]; then
             head -c $max_chars "$f" >> $out
             echo "... " >> $out
             [ -f "$template_path/item_continue_reading.html" ] && cat "$template_path/continue_reading.html" >> "$out" || echo '<a href="@permalink">Continue Reading</a>' >> "$out"
@@ -270,6 +270,6 @@ case "$1" in
     d*) delete $2 ;;
     p*) publish $2 ;;
     u*) unpublish $2 ;;
-    g*) generate $2 $3 ;;
+    g*) generate $2 $3 $4 ;;
     *) help ;;
 esac
